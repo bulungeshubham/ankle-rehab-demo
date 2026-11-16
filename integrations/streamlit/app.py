@@ -37,14 +37,13 @@ def launch(name, script, args):
 
 with st.sidebar:
     st.title('🦶 Ankle Rehab')
-    st.caption('Vision monitoring · IMU comparison')
+    st.caption('Public review demo')
     source = st.selectbox('Sensor source', ['Demonstration'], key='sensor_source')
     st.divider()
-    st.caption('Data freshness: camera 3 s · IMU 5 s')
-    st.caption('Motor: pending bench integration')
+    st.caption('The MG996R was tested separately on an unloaded bench.')
 
-st.title('Ankle rehabilitation workspace')
-st.caption('Monitor movement, check calibration and record prototype measurements.')
+st.title('Ankle rehabilitation dashboard')
+st.caption('Explore the dual-IMU measurement and recording workflow.')
 if HOSTED:
     st.info('Public demonstration: IMU values are simulated. Hardware acquisition and calibration run on the laptop through the private project.')
 if source == 'Demonstration':
@@ -84,7 +83,7 @@ else:
 pitch, roll = sensor_angles(packet)
 cols = st.columns(4)
 cols[0].metric('IMU', imu_status.upper() if len(imu_status) < 30 else 'CHECK SETUP')
-cols[1].metric('Vision', vision_status.upper())
+cols[1].metric('Camera feeds', 'LOCAL ONLY' if HOSTED else vision_status.upper())
 metric(cols[2], 'Relative pitch' if packet.get('measurement_mode') == 'dual_segment_validation' else 'Pitch change', pitch)
 metric(cols[3], 'Relative roll' if packet.get('measurement_mode') == 'dual_segment_validation' else 'Roll change', roll)
 
@@ -106,15 +105,42 @@ if key != st.session_state.last_key:
             st.session_state.recorded.append(row)
     st.session_state.last_key = key
 
-overview, cameras, calibration, recording, setup = st.tabs(['Live monitoring', 'Cameras', 'Calibration', 'Recording', 'Connections'])
+overview, trial, cameras, calibration, recording, setup = st.tabs(
+    ['Live simulation', 'Example trial', 'Cameras', 'Calibration', 'Recording', 'Connections'])
+
+with trial:
+    st.subheader('Example ankle movement trial')
+    st.caption('Synthetic example for demonstrating the workflow. Sample values are generated in this app.')
+    rows = [
+        {
+            'sample_index': i + 1,
+            'sensor_source': 'Synthetic example',
+            'relative_pitch_deg': round(12 * math.sin(math.tau * i / 60), 2),
+            'relative_roll_deg': round(4 * math.sin(math.tau * i / 60 + 0.7), 2),
+        }
+        for i in range(180)
+    ]
+    example = go.Figure()
+    for key, label in [('relative_pitch_deg', 'Relative pitch'), ('relative_roll_deg', 'Relative roll')]:
+        example.add_scatter(x=[row['sample_index'] for row in rows], y=[row[key] for row in rows],
+                            mode='lines', name=label)
+    example.update_layout(height=330, xaxis_title='Sample index', yaxis_title='Relative tilt (°)')
+    st.plotly_chart(example, use_container_width=True)
+    st.download_button('Download synthetic trial CSV', export_csv(rows), 'ankle-synthetic-trial.csv', 'text/csv')
+    st.write('The prototype places one IMU on the foot and another on the shank. Top and side cameras show foot placement in the laptop dashboard.')
+    st.caption('Reference-angle validation and powered linkage testing remain separate from this demonstration.')
+
+
 with overview:
     st.subheader('Movement over time')
     rows = st.session_state.samples
     if rows:
         fig = go.Figure()
-        for field, label in [('pitch_deg','IMU pitch'),('roll_deg','IMU roll'),('side_deg','Side camera'),('front_deg','Front camera')]:
-            fig.add_trace(go.Scatter(x=[datetime.fromtimestamp(r['time'], tz=timezone.utc) for r in rows],
-                y=[r.get(field) for r in rows], name=label, mode='lines', connectgaps=False))
+        for field, label in [('pitch_deg', 'IMU pitch'), ('roll_deg', 'IMU roll'), ('side_deg', 'Side camera'), ('front_deg', 'Front camera')]:
+            values = [row.get(field) for row in rows]
+            if any(value is not None for value in values):
+                fig.add_trace(go.Scatter(x=[datetime.fromtimestamp(r['time'], tz=timezone.utc) for r in rows],
+                    y=values, name=label, mode='lines+markers' if len(rows) == 1 else 'lines', connectgaps=False))
         fig.update_layout(height=340, margin=dict(l=12,r=12,t=20,b=12), yaxis_title='Degrees', legend=dict(orientation='h'))
         st.plotly_chart(fig, use_container_width=True)
     else: st.info('Measurements will appear when a source is connected. Use Demonstration in the sidebar to preview the interface.')
@@ -156,7 +182,7 @@ with cameras:
     with st.expander('Camera log'): st.code(jobs.log('vision'))
 
 with calibration:
-    st.subheader('1. Calibrate both MPU-6050 sensors')
+    st.subheader('1. Calibrate the foot and shank IMUs')
     st.write('Use foot address 0x68 and shank 0x69. Upload the diagnostic sketch in Arduino IDE. Keep both sensors still for startup calibration; repeat after reset or remounting.')
     st.code(str(ROOT / 'firmware/diagnostics/dual_mpu_calibration/dual_mpu_calibration.ino'))
     st.caption('Firmware performs this calibration. Receiving readings does not independently confirm angle accuracy.')
