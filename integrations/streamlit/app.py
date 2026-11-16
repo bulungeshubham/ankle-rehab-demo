@@ -15,7 +15,7 @@ from mqtt_service import mqtt_state, setting
 from processes import OUTPUT, ROOT, Tools
 
 st.set_page_config(page_title='Ankle Rehab · Research dashboard', page_icon='🦶', layout='wide')
-st_autorefresh(interval=1000, key='ankle-refresh')
+
 
 @st.cache_resource
 def get_tools():
@@ -23,6 +23,13 @@ def get_tools():
 
 jobs = get_tools()
 HOSTED = os.getenv('ANKLE_HOSTED') == '1'
+
+if HOSTED and st.sidebar.radio('Dashboard mode', ['Live simulation', 'Review files']) == 'Review files':
+    from review_tools import show_review_tools
+    show_review_tools(ROOT)
+    st.stop()
+
+st_autorefresh(interval=1000, key='ankle-refresh')
 
 def metric(column, label, value, unit='°'):
     value = number(value)
