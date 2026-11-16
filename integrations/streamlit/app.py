@@ -24,10 +24,16 @@ def get_tools():
 jobs = get_tools()
 HOSTED = os.getenv('ANKLE_HOSTED') == '1'
 
-if HOSTED and st.sidebar.radio('Dashboard mode', ['Live simulation', 'Review files']) == 'Review files':
-    from review_tools import show_review_tools
-    show_review_tools(ROOT)
-    st.stop()
+if HOSTED:
+    mode = st.sidebar.radio('Dashboard mode', ['Live simulation', 'Live hardware', 'Review files'])
+    if mode == 'Live hardware':
+        from live_share import show_live_share
+        show_live_share()
+        st.stop()
+    if mode == 'Review files':
+        from review_tools import show_review_tools
+        show_review_tools(ROOT)
+        st.stop()
 
 st_autorefresh(interval=1000, key='ankle-refresh')
 
